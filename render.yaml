@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: game-bot
+    runtime: python
+    plan: starter            # دیسک دائمی فقط روی پلن‌های پولی هست
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false          # توی داشبورد Render وارد کن
+      - key: OWNER_ID
+        sync: false
+      - key: DB_PATH
+        value: /data/truth_or_dare.db
+      - key: PYTHON_VERSION
+        value: 3.11.9
+    disk:
+      name: botdata
+      mountPath: /data
+      sizeGB: 1
