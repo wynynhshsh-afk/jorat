@@ -499,6 +499,21 @@ ROOM_MENU = [
     ["🚪 خروج از روم"],
 ]
 
+# دستوراتی که وقتی کاربر عضو یک رومه، همچنان مجاز به اجرا هستن (دکمه‌های
+# منوی روم + انتخاب‌های داخل بازی). هر چیزی خارج از این لیست (از جمله
+# /start و دکمه‌های منوی اصلی) تا وقتی کاربر توی رومه مسدوده — به‌جز پاسخ
+# آزاد به یک نوبت «حقیقت» فعال که جدا بررسی می‌شه.
+ROOM_CONTEXT_COMMANDS = {
+    "▶️ شروع بازی",
+    "👥 بازیکنان روم",
+    "🚪 خروج از روم",
+    "⚙️ تنظیمات روم",
+    "➕ دعوت از دوستان",
+    "حقیقت",
+    "جرئت",
+    "رد کردن سؤال",
+}
+
 
 async def enter_room_flow(user_id: str, display_name: str, room_id: str):
     db.execute("UPDATE users SET current_room_id=? WHERE user_id=?", (room_id, user_id))
@@ -1169,6 +1184,38 @@ async def handle_update(update: dict):
         await end_game(room["room_id"], reason="پایان اجباری توسط مالک ربات.")
         await send_message(user_id, "✅ انجام شد.", keyboard=ADMIN_MENU)
         return
+
+    # --- قفل روم: تا وقتی کاربر عضو یک رومه، فقط دستورات داخل روم مجازن ---
+    # باگی که اینجا رفع می‌شه: قبلاً وقتی کاربر توی یه رومه و /start یا یکی
+    # از دکمه‌های منوی اصلی (مثلاً «ساخت روم»، «روم رندوم»، «دوستان») رو
+    # می‌فرستاد، ربات بدون توجه به عضویتش توی روم، اون دستور رو اجرا می‌کرد؛
+    # این باعث می‌شد کاربر همزمان توی چند روم عضو بمونه یا state‌ش به‌هم
+    # بریزه، درحالی‌که سرور فکر می‌کرد هنوز توی روم قبلیشه (باگ «خروج ضمنی
+    # از روم بدون صدا زدن leave_room»). راه‌حل: تا وقتی current_room_id ست
+    # شده، هر متنی که جزو دکمه‌های خودِ روم (یا پاسخ یک نوبت «حقیقت» فعال)
+    # نباشه، رد می‌شه و به کاربر گفته می‌شه اول باید با «🚪 خروج از روم» از
+    # روم خارج بشه.
+    current_room_guard = db.fetchone(
+        "SELECT current_room_id FROM users WHERE user_id=?", (user_id,)
+    )
+    room_id_guard = current_room_guard["current_room_id"] if current_room_guard else None
+    if room_id_guard:
+        in_room_allowed = text in ROOM_CONTEXT_COMMANDS
+        if not in_room_allowed:
+            pending_truth = db.fetchone(
+                "SELECT 1 FROM turns WHERE user_id=? AND status='WAITING_ANSWER' AND qtype='TRUTH' "
+                "ORDER BY started_at DESC LIMIT 1",
+                (user_id,),
+            )
+            in_room_allowed = pending_truth is not None
+        if not in_room_allowed:
+            await send_message(
+                user_id,
+                "⛔️ تو الان توی یک رومی! نمی‌تونی از این دستور استفاده کنی.\n"
+                "اول باید با «🚪 خروج از روم» از روم خارج بشی.",
+                keyboard=ROOM_MENU,
+            )
+            return
 
     # --- منوی اصلی ---
     if text in ("/start", "start", "شروع"):

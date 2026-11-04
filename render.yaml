@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter            # دیسک دائمی فقط روی پلن‌های پولی هست
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: python start.py
     healthCheckPath: /health
     envVars:
       - key: BOT_TOKEN
